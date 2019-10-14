@@ -54,3 +54,42 @@ select ProductID, ProductName, CompanyName from Suppliers s join Products p on s
 
 -- Orders and the Shipper that was used
 select OrderID, convert(date, OrderDate), CompanyName from Shippers s join Orders o on s.ShipperID = o.ShipVia
+
+-- Categories, and the total products in each category
+select * from products
+select CategoryName, count(ProductID) as TotalProducts from Products p 
+join Categories c on p.CategoryID = c.CategoryID group by CategoryName order by TotalProducts desc
+
+-- Total customers per country/city
+select Country, City, count(CustomerID) as TotalCustomer from Customers group by Country, City order by TotalCustomer desc
+
+-- Products that need reordering
+select ProductID, ProductName, UnitsInStock, ReorderLevel from products where UnitsInStock < ReorderLevel order by ProductID
+
+-- Products that need reoreding (Continued)
+select ProductID, ProductName, UnitsInStock, UnitsOnOrder, ReorderLevel, Discontinued from Products 
+where UnitsInStock + UnitsOnOrder <= ReorderLevel and Discontinued = 0
+
+-- Customer list by region
+select CustomerID, CompanyName, Region from Customers 
+order by case when region is null then 1 else 0 end, Region
+
+-- High freight charges
+select TOP 3 ShipCountry, avg(Freight) as AverageFreight from Orders group by ShipCountry order by AVG(Freight) desc 
+
+-- High freight charges - 1997
+select * from Orders
+select TOP 3 ShipCountry, avg(Freight) as AverageFreight from Orders where year(OrderDate) = 1997 group by ShipCountry order by AVG(Freight) desc 
+
+-- High freight charges with between
+select * from orders order by OrderDate
+
+-- High freight charges - last year
+select ShipCountry, avg(Freight) as AverageFreight from Orders
+where OrderDate = (select DATEADD(YEAR, -1, (select max(orderDate) from Orders))) 
+group by ShipCountry order by AverageFreight
+
+-- Inventory list
+select * from Orders
+select EmployeeID as eID, LastName, OrderID, Product, Quantity from Employees e
+join Orders o on eiD = o.EmployeeID
