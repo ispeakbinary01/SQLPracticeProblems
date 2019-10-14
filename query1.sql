@@ -85,11 +85,64 @@ select TOP 3 ShipCountry, avg(Freight) as AverageFreight from Orders where year(
 select * from orders order by OrderDate
 
 -- High freight charges - last year
-select ShipCountry, avg(Freight) as AverageFreight from Orders
-where OrderDate = (select DATEADD(YEAR, -1, (select max(orderDate) from Orders))) 
-group by ShipCountry order by AverageFreight
+select TOP 3 ShipCountry, avg(Freight) as AverageFreight from Orders
+where OrderDate >= (select DATEADD(YEAR, -1, (select max(orderDate) from Orders))) 
+group by ShipCountry order by AverageFreight DESC
 
 -- Inventory list
-select * from Orders
-select EmployeeID as eID, LastName, OrderID, Product, Quantity from Employees e
-join Orders o on eiD = o.EmployeeID
+select e.EmployeeID, e.LastName, od.OrderID, p.ProductName, od.Quantity from Orders o
+join [Order Details] od on o.OrderID = od.OrderID
+join Products p on od.ProductID = p.ProductID
+join Employees e on o.EmployeeID = e.EmployeeID
+order by o.OrderID, p.ProductID
+
+-- Customers with no orders
+select Customers.CustomerID, Orders.CustomerID from Customers
+left join Orders on customers.CustomerID = orders.CustomerID
+where orders.CustomerID is null
+
+-- Customers with no Orders for EmployeeID 4
+select c.CustomerID, o.CustomerID
+from Customers as c
+left join Orders o on o.CustomerID = c.CustomerID and o.EmployeeID = 4
+where o.CustomerID is null
+
+-- High-Value Customers
+select c.CustomerID, c.CompanyName, o.OrderID, sum(od.UnitPrice * od.Quantity) totalPrice
+from customers c 
+inner join orders o on c.CustomerID = o.CustomerID
+inner join [Order Details] od on o.OrderID = od.OrderID
+where year(o.OrderDate) = 2016
+group by c.CustomerID, c.CompanyName, o.OrderID
+HAVING totalPrice >= 1000 -- To solve
+order by totalPrice desc;
+
+-- High-Value customers - total orders ???
+
+-- High-Value customers - with discount ???
+
+-- Month-End orders
+select o.EmployeeID, OrderID, OrderDate from Orders o
+join Employees e on o.EmployeeID = e.EmployeeID
+where day(OrderDate) in (31, 30, 28, 29)
+
+-- Orders with many line items
+select top 2 percent od.OrderID, count(*) as totalOrders
+from [Order Details] od
+join orders o on od.OrderID = o.OrderID
+group by od.OrderID
+order by totalOrders desc
+
+-- Orders - random assortment ?? figure out random values
+
+
+-- Orders - accidental double-entry
+SELECT *
+FROM OrderDetails
+WHERE Quantity >= 60
+GROUP BY OrderID, Quantity
+HAVING COUNT(*) > 1
+ORDER BY OrderID;
+
+-- Orders - accidental double-entry details
+
