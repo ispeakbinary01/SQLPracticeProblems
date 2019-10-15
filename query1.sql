@@ -134,15 +134,128 @@ group by od.OrderID
 order by totalOrders desc
 
 -- Orders - random assortment ?? figure out random values
-
-
+select OrderID from Orders 
+WHERE 0.02 >= CAST(CHECKSUM(NEWID(), OrderID) & 0x7fffffff AS float) / CAST (0x7fffffff AS int)
 -- Orders - accidental double-entry
-SELECT *
-FROM OrderDetails
-WHERE Quantity >= 60
-GROUP BY OrderID, Quantity
-HAVING COUNT(*) > 1
-ORDER BY OrderID;
+select OrderID from [Order Details]
+where Quantity >= 60
+group by OrderID, Quantity
+having count(*) > 1
 
 -- Orders - accidental double-entry details
+SELECT * 
+FROM [Order Details]
+WHERE OrderID in (SELECT DISTINCT OrderID FROM [Order Details] WHERE Quantity >= 60 GROUP BY OrderID, Quantity HAVING COUNT(*) > 1)
+ORDER BY Quantity;
 
+-- Orders - accidental double-entry details, derived table
+select od.OrderID, UnitPrice, Quantity, Discount from [Order Details] od
+join (select distinct OrderID from [Order Details] where Quantity >= 60 group by OrderID, Quantity having count(*) > 1) PotentialProblemOrders on PotentialProblemOrders.OrderID = od.OrderID
+order by OrderID, ProductID
+
+-- Late Orders
+select * from Orders where RequiredDate < ShippedDate
+
+-- Late Orders - which employees?
+select o.EmployeeID, LastName, Count(OrderID) TotalLateOrders from Orders o 
+join Employees e on o.EmployeeID = e.EmployeeID where RequiredDate < ShippedDate 
+group by o.EmployeeID, LastName order by TotalLateOrders desc
+
+-- Late orders vs total orders
+with LateOrders as (
+	select EmployeeID, Count(*) LateOrders from Orders where RequiredDate <= ShippedDate
+	group by EmployeeID
+), TotalOrders as (
+	select EmployeeID, Count(*) TotalOrders from Orders group by EmployeeID
+) 
+select TotalOrders.EmployeeID, LastName, TotalOrders, LateOrders from TotalOrders
+join Employees e on TotalOrders.EmployeeID = e.EmployeeID
+join LateOrders lo on TotalOrders.EmployeeID = lo.EmployeeID
+order by TotalOrders desc
+
+-- Late Orders vs total orders - percentage
+with LateOrders as (
+	select EmployeeID, Count(*) LateOrders from Orders where RequiredDate <= ShippedDate
+	group by EmployeeID
+), TotalOrders as (
+	select EmployeeID, Count(*) TotalOrders from Orders group by EmployeeID
+) 
+select TotalOrders.EmployeeID, LastName, TotalOrders, LateOrders, 
+round(LateOrders * 100.0 / TotalOrders, 2) PercentLateOrders from TotalOrders
+join Employees e on TotalOrders.EmployeeID = e.EmployeeID
+join LateOrders lo on TotalOrders.EmployeeID = lo.EmployeeID
+order by TotalOrders desc
+
+-- Late orders vs total orders - fix decimal
+with LateOrders as (
+	select EmployeeID, Count(*) LateOrders from Orders where RequiredDate <= ShippedDate
+	group by EmployeeID
+), TotalOrders as (
+	select EmployeeID, Count(*) TotalOrders from Orders group by EmployeeID
+) 
+select TotalOrders.EmployeeID, LastName, TotalOrders, LateOrders, 
+cast(round(LateOrders * 100.0 / TotalOrders, 2) as numeric(36, 2)) PercentLateOrders from TotalOrders
+join Employees e on TotalOrders.EmployeeID = e.EmployeeID
+join LateOrders lo on TotalOrders.EmployeeID = lo.EmployeeID
+order by TotalOrders desc
+
+-- Customer grouping
+select *,
+	case when TotalOrderAmount between 0 and 1000 then 'Low' 
+	when TotalOrderAmount between 1000 and 5000 then 'Medium'
+	when TotalOrderAmount between 5000 and 10000 then 'High' 
+	when TotalOrderAmount >= 10000 then 'Very High'
+	end CustomerGroup
+from (
+	select o.CustomerID, c.CompanyName, sum(od.UnitPrice * od.Quantity) as TotalOrderAmount
+	from Orders o
+	join [Order Details] od on o.OrderID = od.OrderID
+	join Customers c on o.CustomerID = c.CustomerID
+	where o.OrderDate between '19960101' and '19970101'
+	group by o.CustomerID, c.CompanyName
+	) cg
+
+-- Customer grouping - fix null (Fixed in above query)
+
+-- Customer grouping with percentage
+with Order1996 as (
+	select c.CustomerID, c.CompanyName, sum(Quantity * UnitPrice) TotalOrderAmount
+	from Customers c
+	join Orders o on o.CustomerID = c.CustomerID
+	join [Order Details] od on o.OrderID = od.OrderID
+	where OrderDate >= '19960101' and OrderDate < '19970101'
+	group by c.CustomerID, c.CompanyName
+), CustomerGroupuing as (
+	select CustomerID, CompanyName, TotalOrderAmount, CustomerGroup =
+	case
+		when TotalOrderAmount between 0 and 1000 then 'Low'
+		when TotalOrderAmount between 1000 and 5000 then 'Medium'
+		when TotalOrderAmount between 5000 and 10000 then 'High'
+		when TotalOrderAmount >= 10000 then 'Very High'
+		end from Order1996
+)
+select CustomerGroup, count(*) TotalInGroup, count(*) * 1.0 / (select count(*) from CustomerGroupuing)
+from CustomerGroupuing group by CustomerGroup 
+order by TotalInGroup desc;
+
+-- Customer grouping - flexible (Missing CustomerGroupThresholds table)
+
+-- Countries with suplliers or customers
+select Country from Customers union select Country from Suppliers
+
+-- Countries with suppliers or customers, version 2
+;with s as (select distinct Country from Suppliers), c as (select distinct Country from Customers)
+select s.Country SupplierCountry , c.Country CustomerCountry from s
+full outer join c
+on c.Country = s.Country
+
+-- Countries with suppliers or customers, version 3
+with SupplierCountries as (select Country, Total = Count(*) from Suppliers group by Country),
+CustomerCountries as (select Country, Total = Count(*) from Customers group by Country)
+select isnull(sc.Country, cc.Country) Country, isnull(sc.Total, 0) TotalSuppliers, isnull(cc.Total, 0) TotalCustomers from SupplierCountries sc
+full outer join CustomerCountries cc on cc.Country = sc.Country
+
+-- First order in each country
+with OrdersByCountry as (
+	select
+)
